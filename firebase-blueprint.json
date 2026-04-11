@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information and preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user." },
+        "displayName": { "type": "string", "description": "The name shown to others." },
+        "email": { "type": "string", "format": "email", "description": "User's email address." },
+        "photoURL": { "type": "string", "format": "uri", "description": "URL to the user's profile picture." },
+        "bio": { "type": "string", "description": "Short biography of the user." },
+        "classOf": { "type": "string", "description": "Graduation year." },
+        "location": { "type": "string", "description": "User's current location." },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "User's role in the platform." },
+        "expertise": { "type": "array", "items": { "type": "string" }, "description": "List of skills or expertise." }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A community post or memory.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "authorUid": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorPhoto": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "type": { "type": "string", "enum": ["spotlight", "news", "memory", "discussion"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "likes": { "type": "number" }
+      },
+      "required": ["authorUid", "content", "type", "createdAt"]
+    },
+    "Booking": {
+      "title": "Campus Booking",
+      "description": "A reservation for a campus space.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userUid": { "type": "string" },
+        "spaceName": { "type": "string" },
+        "duration": { "type": "string" },
+        "capacity": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userUid", "spaceName", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profile documents."
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Community posts and news."
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Space bookings."
+    }
+  }
+}
