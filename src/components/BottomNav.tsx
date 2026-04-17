@@ -1,14 +1,14 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutGrid, Compass, Map as MapIcon, Bot, User } from 'lucide-react';
+import { LayoutGrid, Compass, Bot, User, MessageSquare } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export const BottomNav: React.FC = () => {
   const navItems = [
     { icon: LayoutGrid, path: '/', label: 'Feed' },
-    { icon: Compass, path: '/explore', label: 'Explore' },
-    { icon: MapIcon, path: '/map', label: 'Map' },
+    { icon: Compass, path: '/gallery', label: 'Gallery' },
     { icon: Bot, path: '/aura', label: 'Aura', isCenter: true },
+    { icon: MessageSquare, path: '/messages', label: 'Messages' },
     { icon: User, path: '/profile', label: 'Profile' },
   ];
 
@@ -21,8 +21,8 @@ export const BottomNav: React.FC = () => {
             to={item.path}
             className={({ isActive }) => cn(
               "flex items-center justify-center p-4 transition-all duration-300",
-              item.isCenter 
-                ? "bg-primary text-white rounded-full shadow-lg scale-110 -translate-y-2" 
+              item.isCenter
+                ? "bg-primary text-white rounded-full shadow-lg scale-110 -translate-y-2"
                 : isActive ? "text-primary scale-110" : "text-slate-400 hover:text-primary"
             )}
           >

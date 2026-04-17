@@ -3,6 +3,7 @@ import { Send, PlusCircle, Bot, Search, Globe } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
+import { AuraSphere } from '../components/AuraSphere';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -17,7 +18,7 @@ export const Aura: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'model',
-      text: "Hello! I'm Aura, your AI career mentor. I'm now powered by **Groq** for lightning-fast insights. I can also perform real-time web searches for companies and trends using **Gemini Search Grounding**. How can I help you today?",
+      text: "Hello! I'm Aura, your AI career mentor. I'm now powered by **Mistral** for lightning-fast insights and career gamification. I can also perform real-time web searches using **Gemini Search Grounding**. How can I help you today?",
       timestamp: new Date()
     }
   ]);
@@ -43,7 +44,7 @@ export const Aura: React.FC = () => {
       if (isSearchRequest) {
         // Use Gemini for real-time search grounding
         const result = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+          model: 'gemini-2.0-flash',
           contents: input,
           config: {
             systemInstruction: "You are a career search assistant. Use Google Search to find real-time information about companies, hiring trends, and alumni opportunities. Provide a detailed report with links if possible.",
@@ -57,10 +58,12 @@ export const Aura: React.FC = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: messages.concat(userMsg).map(m => ({
-              role: m.role === 'model' ? 'assistant' : m.role,
-              content: m.text
-            }))
+            messages: messages.concat(userMsg)
+              .filter(m => m.role !== 'system')
+              .map(m => ({
+                role: m.role === 'model' ? 'assistant' : m.role,
+                content: m.text
+              }))
           })
         });
         const data = await response.json();
@@ -83,17 +86,12 @@ export const Aura: React.FC = () => {
   return (
     <main className="pt-24 pb-32 px-4 max-w-5xl mx-auto min-h-screen flex flex-col items-center">
       {/* The Aura Section */}
-      <div className="relative w-full flex flex-col items-center justify-center mb-16 py-12">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-sky-200/20 blur-[120px] rounded-full" />
-        <div className="aura-sphere w-64 h-64 md:w-80 md:h-80 rounded-full backdrop-blur-md flex items-center justify-center relative z-10 transition-transform hover:scale-105 duration-700 bg-gradient-to-br from-primary-container/40 via-purple-200/40 to-emerald-100/40 shadow-[inset_0_0_50px_rgba(255,255,255,0.8),0_0_80px_rgba(144,205,253,0.3)]">
-          <div className="text-center p-8">
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-primary mb-2">The Aura</h1>
-            <p className="text-xs font-bold tracking-[0.2em] text-primary/60 uppercase">System Active</p>
-          </div>
-        </div>
-        <div className="mt-8 text-center max-w-md z-10">
-          <h2 className="text-2xl font-bold text-on-surface mb-2">Ask your AI mentor for career advice or campus info</h2>
-          <p className="text-on-surface-variant leading-relaxed">Personalized guidance powered by the AlumniCloud network intelligence.</p>
+      <div className="relative w-full flex flex-col items-center justify-center mb-16 py-12 h-[350px]">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-sky-200/20 blur-[120px] rounded-full pointer-events-none" />
+        <AuraSphere />
+        <div className="absolute bottom-0 text-center max-w-md z-10 pointer-events-none bg-white/40 backdrop-blur-md px-6 py-4 rounded-3xl border border-white/50 shadow-xl">
+          <h2 className="text-xl font-bold text-sky-950 mb-1">Ask your gamified AI mentor</h2>
+          <p className="text-sm text-slate-600 font-medium tracking-wide">Earn XP and career insights</p>
         </div>
       </div>
 

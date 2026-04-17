@@ -7,13 +7,17 @@ import { Aura } from './screens/Aura';
 import { CampusMap } from './screens/CampusMap';
 import { Profile } from './screens/Profile';
 import { Gallery } from './screens/Gallery';
-import { Messages } from './screens/Messages';
 import { OfficeHours } from './screens/OfficeHours';
 import { VoiceCall } from './screens/VoiceCall';
 import { Events } from './screens/Events';
-import { Membership } from './screens/Membership';
+import { Messages } from './screens/Messages';
 import { TopAppBar } from './components/TopAppBar';
 import { BottomNav } from './components/BottomNav';
+import { Jobs } from './screens/Jobs';
+import { Groups } from './screens/Groups';
+import { Directory } from './screens/Directory';
+import { Mentorship } from './screens/Mentorship';
+import { Boardroom } from './screens/Boardroom';
 
 const App: React.FC = () => {
   const { user, loading } = useAuth();
@@ -39,11 +43,15 @@ const App: React.FC = () => {
         <Route path="/map" element={<CampusMap />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/gallery" element={<Gallery />} />
-        <Route path="/messages" element={<Messages />} />
         <Route path="/office-hours" element={<OfficeHours />} />
         <Route path="/call" element={<VoiceCall />} />
         <Route path="/events" element={<Events />} />
-        <Route path="/membership" element={<Membership />} />
+        <Route path="/messages" element={<Messages />} />
+        <Route path="/jobs" element={<Jobs />} />
+        <Route path="/groups" element={<Groups />} />
+        <Route path="/directory" element={<Directory />} />
+        <Route path="/mentorship" element={<Mentorship />} />
+        <Route path="/boardroom" element={<Boardroom />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       <BottomNav />
