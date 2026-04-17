@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Camera, Save, X, MapPin, GraduationCap, Briefcase, Sparkles, CheckCircle2, Plus } from 'lucide-react';
+import { Camera, Save, X, MapPin, GraduationCap, Briefcase, Sparkles, CheckCircle2, Plus, FileUp, FileCheck, AlertCircle } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
 import { cn } from '../lib/utils';
 
 const EXPERTISE_SUGGESTIONS = [
@@ -29,6 +30,9 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const resumeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (profile) {
@@ -65,6 +69,42 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
 
   const removeExpertise = (tag: string) => {
     setExpertiseList(prev => prev.filter(t => t !== tag));
+  };
+
+  const handleResumeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile?.uid) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size exceeds 5MB limit.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+
+    const storageRef = ref(storage, `resumes/${profile.uid}/${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on('state_changed', 
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(Math.round(progress));
+      }, 
+      (error) => {
+        console.error('Upload error:', error);
+        setError('Failed to upload file. Ensure Storage is enabled in Firebase.');
+        setUploading(false);
+        setUploadProgress(null);
+      }, 
+      () => {
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+          setFormData(prev => ({ ...prev, resumeUrl: downloadURL }));
+          setUploading(false);
+          setUploadProgress(null);
+        });
+      }
+    );
   };
 
   const handleSave = async () => {
@@ -230,15 +270,63 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-400 ml-2">Resume / CV Link</label>
-            <input
-              className="w-full recessed-input p-4 text-sm font-medium"
-              placeholder="e.g. Google Drive link or Portfolio URL"
-              value={formData.resumeUrl}
-              onChange={(e) => setFormData({ ...formData, resumeUrl: e.target.value })}
-            />
-            <p className="text-[10px] text-slate-400 ml-2 font-medium">Providing a resume makes it easier to refer you for Jobs.</p>
+          <div className="space-y-3">
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-400 ml-2">Resume / CV Document</label>
+            
+            <div className="flex flex-col gap-4">
+              <div 
+                onClick={() => !uploading && resumeInputRef.current?.click()}
+                className={cn(
+                  "recessed-input p-6 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-slate-50 transition-all",
+                  uploading && "opacity-50 cursor-not-allowed",
+                  formData.resumeUrl && "border-emerald-200 bg-emerald-50/30"
+                )}
+              >
+                {uploading ? (
+                  <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div className="bg-primary h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{uploadProgress}% Uploading...</span>
+                  </div>
+                ) : formData.resumeUrl ? (
+                  <>
+                    <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg">
+                      <FileCheck size={24} />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-emerald-700">Resume Uploaded Successfully!</p>
+                      <p className="text-[10px] text-emerald-600 font-medium">Click to upload a different version</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                      <FileUp size={24} />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-sky-950">Click to Upload PDF or DOCX</p>
+                      <p className="text-[10px] text-slate-400 font-medium">Max size: 5MB</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              <input ref={resumeInputRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleResumeUpload} />
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400 ml-2">Alternative: External Link</label>
+                <div className="recessed-input px-4 py-3">
+                  <input
+                    className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium"
+                    placeholder="Paste a Google Drive or Portfolio link instead..."
+                    value={formData.resumeUrl}
+                    onChange={(e) => setFormData({ ...formData, resumeUrl: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 ml-2 font-medium">Providing a resume makes it significantly easier to be referred for top roles.</p>
           </div>
         </div>
 
