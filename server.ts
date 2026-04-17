@@ -14,14 +14,11 @@ const __dirname = path.dirname(__filename);
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
+app.use(express.json());
 
-  app.use(express.json());
-
-  // API Routes
-  app.post("/api/aura", async (req, res) => {
+// API Routes
+app.post("/api/aura", async (req, res) => {
     try {
       const { messages } = req.body;
       const completion = await mistral.chat.complete({
@@ -235,6 +232,12 @@ Be specific, reference what the candidate said, and be honest — not all judges
     }
   });
 
+// Export app for Vercel
+export default app;
+
+async function startServer() {
+  const PORT = 3000;
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -255,4 +258,7 @@ Be specific, reference what the candidate said, and be honest — not all judges
   });
 }
 
-startServer();
+// Only start the server if not running on Vercel
+if (!process.env.VERCEL) {
+  startServer();
+}
