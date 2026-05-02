@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Search, Filter, MapPin, Briefcase, GraduationCap, Mail, MessageCircle, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, MapPin, Briefcase, GraduationCap, Mail, MessageCircle, ChevronDown, Users } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export interface AlumniData {
   id: string;
@@ -16,7 +18,7 @@ export interface AlumniData {
 
 const INDUSTRIES = ['All', 'Technology', 'Finance', 'Healthcare', 'Energy', 'Aerospace'];
 const LOCATIONS = ['All', 'San Francisco, CA', 'New York, NY', 'Berlin, Germany', 'London, UK', 'Toronto, Canada'];
-const CLASS_YEARS = ['All', '2010', '2014', '2016', '2018', '2019', '2021'];
+const CLASS_YEARS = ['All', '2010', '2014', '2016', '2018', '2019', '2021', '2022', '2023', '2024'];
 
 export const Directory: React.FC = () => {
   const navigate = useNavigate();
@@ -26,15 +28,52 @@ export const Directory: React.FC = () => {
   const [filters, setFilters] = useState({ industry: 'All', location: 'All', classOf: 'All' });
   const [showFiltersMobile, setShowFiltersMobile] = useState(false);
 
-  React.useEffect(() => {
-    fetch('/api/alumni')
-      .then(res => res.json())
-      .then(data => { setAlumniDb(data.alumni); setIsLoading(false); })
-      .catch(err => { console.error(err); setIsLoading(false); });
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch demo alumni
+        const demoRes = await fetch('/api/alumni');
+        const demoData = await demoRes.json();
+        const demoAlumni = demoData.alumni || [];
+
+        // Fetch real users from Firestore
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        const realUsers: AlumniData[] = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.displayName || 'Alumni',
+            role: data.expertise?.[0] || 'Member',
+            company: data.company || 'AlumniCloud',
+            location: data.location || 'Global',
+            classOf: data.classOf || '2024',
+            industry: data.industry || 'Technology',
+            photo: data.photoURL || `https://picsum.photos/seed/${doc.id}/200/200`
+          };
+        });
+
+        // Merge and remove duplicates (prefer real users if IDs clash, though unlikely)
+        const combined = [...realUsers];
+        demoAlumni.forEach((da: any) => {
+          if (!combined.find(u => u.id === da.id)) {
+            combined.push(da);
+          }
+        });
+
+        setAlumniDb(combined);
+      } catch (err) {
+        console.error("Error fetching alumni data:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
-  const filteredAlumni = alumniDb.filter(a => {
-    const matchSearch = a.name.toLowerCase().includes(search.toLowerCase()) || a.company.toLowerCase().includes(search.toLowerCase());
+  const filteredAlumni = (alumniDb || []).filter(a => {
+    const matchSearch = (a.name || '').toLowerCase().includes(search.toLowerCase()) || (a.company || '').toLowerCase().includes(search.toLowerCase());
     const matchInd = filters.industry === 'All' || a.industry === filters.industry;
     const matchLoc = filters.location === 'All' || a.location === filters.location;
     const matchClass = filters.classOf === 'All' || a.classOf === filters.classOf;

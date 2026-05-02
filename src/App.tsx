@@ -18,6 +18,10 @@ import { Groups } from './screens/Groups';
 import { Directory } from './screens/Directory';
 import { Mentorship } from './screens/Mentorship';
 import { Boardroom } from './screens/Boardroom';
+import { MarketNews } from './screens/MarketNews';
+import { CareerGuide } from './screens/CareerGuide';
+import { InterviewSprint } from './screens/InterviewSprint';
+import { DailyChallenges } from './components/DailyChallenges';
 
 const App: React.FC = () => {
   const { user, loading } = useAuth();
@@ -25,7 +29,10 @@ const App: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Loading AlumniCloud...</p>
+        </div>
       </div>
     );
   }
@@ -35,13 +42,14 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-surface transition-colors duration-300">
       <TopAppBar />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/aura" element={<Aura />} />
         <Route path="/map" element={<CampusMap />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/profile/:id" element={<Profile />} />
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/office-hours" element={<OfficeHours />} />
         <Route path="/call" element={<VoiceCall />} />
@@ -52,9 +60,13 @@ const App: React.FC = () => {
         <Route path="/directory" element={<Directory />} />
         <Route path="/mentorship" element={<Mentorship />} />
         <Route path="/boardroom" element={<Boardroom />} />
+        <Route path="/news" element={<MarketNews />} />
+        <Route path="/guide" element={<CareerGuide />} />
+        <Route path="/sprint" element={<InterviewSprint />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       <BottomNav />
+      <DailyChallenges />
     </div>
   );
 };

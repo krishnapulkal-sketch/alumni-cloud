@@ -15,16 +15,10 @@ interface Group {
   isJoined?: boolean;
 }
 
-const SEED_GROUPS: Group[] = [
-  { id: '1', name: 'Founders & VC Hub', description: 'Connect with fellow student founders, get pitch feedback, and meet alumni venture capitalists.', membersCount: 1240, tags: ['Startups', 'Venture Capital', 'Networking'], image: 'https://picsum.photos/seed/groups1/400/200' },
-  { id: '2', name: 'Design Innovators', description: 'UX/UI, Graphic Design, and Product Strategy discussions.', membersCount: 840, tags: ['UX', 'Figma', 'Product'], image: 'https://picsum.photos/seed/groups2/400/200' },
-  { id: '3', name: 'Web3 Builders', description: 'Smart contracts, AI agents, and cryptography enthusiasts.', membersCount: 350, tags: ['Crypto', 'Web3', 'Blockchain'], image: 'https://picsum.photos/seed/groups3/400/200' },
-  { id: '4', name: 'London Chapter', description: 'Official global hub for Alumni situated in London, UK.', membersCount: 2200, tags: ['London', 'Events', 'Chapter'], image: 'https://picsum.photos/seed/groups4/400/200' }
-];
-
 export const Groups: React.FC = () => {
-  const { user } = useAuth();
-  const [groups, setGroups] = useState<Group[]>(SEED_GROUPS);
+  const { user, profile } = useAuth();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeGroup, setActiveGroup] = useState<Group | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -36,7 +30,29 @@ export const Groups: React.FC = () => {
       .then(res => res.json())
       .then(data => setRealMembers(data.alumni || []))
       .catch(console.error);
-  }, []);
+
+    const fetchGroups = async () => {
+      setLoading(true);
+      try {
+        const skills = profile?.expertise?.join(', ') || 'Technology';
+        const res = await fetch('/api/groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userSkills: skills })
+        });
+        const data = await res.json();
+        if (data.groups) {
+          setGroups(data.groups.map((g: any, i: number) => ({ ...g, id: String(i) })));
+        }
+      } catch (e) {
+        console.error("Failed to fetch groups", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGroups();
+  }, [profile]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -108,30 +124,43 @@ export const Groups: React.FC = () => {
           <h2 className="text-xl font-bold flex items-center gap-2 mb-6 text-sky-950">
             <Hash size={20} className="text-slate-400" /> Discover Communities
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {discoverGroups.map(g => (
-              <div key={g.id} className="clay-card rounded-3xl overflow-hidden group">
-                <div className="h-32 relative overflow-hidden">
-                  <img src={g.image} alt={g.name} className="w-full h-full object-cover opacity-80" referrerPolicy="no-referrer" />
-                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold text-sky-950 uppercase">
-                    {g.tags[0]}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="clay-card rounded-3xl p-6 animate-pulse space-y-4">
+                  <div className="h-32 bg-slate-200 dark:bg-slate-700 rounded-2xl w-full" />
+                  <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-3/4" />
+                  <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-md w-full" />
+                  <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-md w-5/6" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {discoverGroups.map((g, i) => (
+                <div key={g.id} className="clay-card rounded-3xl overflow-hidden group fade-in-up" style={{ animationDelay: `${i * 100}ms` }}>
+                  <div className="h-32 relative overflow-hidden bg-slate-100">
+                    <img src={g.image} alt={g.name} className="w-full h-full object-cover opacity-80" referrerPolicy="no-referrer" />
+                    <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold text-sky-950 uppercase shadow-sm">
+                      {g.tags?.[0] || 'Community'}
+                    </div>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <h3 className="font-bold text-xl text-sky-950 dark:text-white">{g.name}</h3>
+                    <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">{g.description}</p>
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-700">
+                      <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5"><Users size={14} className="text-sky-500" /> {g.membersCount.toLocaleString()} Members</span>
+                      <button onClick={() => handleJoin(g.id)} className="bg-primary text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-primary-dim transition-colors flex items-center gap-1.5 shadow-lg shadow-primary/20">
+                        <UserPlus size={14} /> Join Hub
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="p-5 space-y-4">
-                  <h3 className="font-bold text-xl text-sky-950">{g.name}</h3>
-                  <p className="text-sm text-slate-500 line-clamp-2">{g.description}</p>
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                    <span className="text-xs font-bold text-slate-400 flex items-center gap-1"><Users size={14} /> {g.membersCount} Members</span>
-                    <button onClick={() => handleJoin(g.id)} className="bg-primary text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-primary-dim transition-colors flex items-center gap-1">
-                      <UserPlus size={14} /> Join Hub
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          {discoverGroups.length === 0 && (
-            <div className="text-center py-20 bg-white rounded-3xl border border-slate-100">
+              ))}
+            </div>
+          )}
+          {!loading && discoverGroups.length === 0 && (
+            <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700">
               <p className="text-slate-400 font-medium">No communities found. Try a different search.</p>
             </div>
           )}

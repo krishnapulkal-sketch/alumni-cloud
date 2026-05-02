@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Mic, MicOff, Video, VideoOff, ArrowLeft, Send, Loader2,
+  Mic, MicOff, Video, VideoOff, ArrowLeft, ArrowRight, Send, Loader2,
   Star, AlertCircle, CheckCircle2, ChevronRight, Volume2,
-  BrainCircuit, Users, Trophy, RefreshCw
+  BrainCircuit, Users, Trophy, RefreshCw, BookOpen, Zap, Gamepad2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useGamification } from '../context/GamificationContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface JudgeFeedback {
@@ -107,6 +108,7 @@ const VERDICT_CONFIG = {
 // ─── Main Component ────────────────────────────────────────────────────────────
 export const Boardroom: React.FC = () => {
   const navigate = useNavigate();
+  const { addXP, completeChallenge, trackAction } = useGamification();
   const videoRef = useRef<HTMLVideoElement>(null);
   const recognitionRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -114,6 +116,9 @@ export const Boardroom: React.FC = () => {
   // Setup state
   const [phase, setPhase] = useState<'setup' | 'interview' | 'results'>('setup');
   const [role, setRole] = useState('Software Engineer');
+  const [context, setContext] = useState(''); // New custom context
+  const [difficulty, setDifficulty] = useState<'Entry' | 'Mid' | 'Senior'>('Mid');
+  const [showPrepTips, setShowPrepTips] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -163,7 +168,11 @@ export const Boardroom: React.FC = () => {
   };
 
   useEffect(() => {
-    return () => { stopCamera(); recognitionRef.current?.stop(); };
+    return () => { 
+      stopCamera(); 
+      recognitionRef.current?.stop(); 
+      window.speechSynthesis?.cancel(); // Cancel any ongoing speech when unmounting
+    };
   }, [stopCamera]);
 
   // ── Speech Recognition ──────────────────────────────────────────────────────
@@ -216,7 +225,7 @@ export const Boardroom: React.FC = () => {
       const res = await fetch('/api/boardroom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, role, round: round + 1 }),
+        body: JSON.stringify({ transcript, role, round: round + 1, context }),
       });
       const data = await res.json();
       const feedback: JudgeFeedback[] = data.feedback || [];
@@ -226,24 +235,55 @@ export const Boardroom: React.FC = () => {
 
       const newRound: Round = { question: currentQ, transcript, feedback, avgScore };
       setRounds(prev => [...prev, newRound]);
+      setTranscript(''); // Clear immediately so UI is clean
 
       // Animate judges speaking one by one
       setActiveJudge(null);
-      let delay = 0;
-      feedback.forEach((j, i) => {
-        setTimeout(() => setSpeakingJudge(j.judge), delay);
-        delay += 1800;
-        setTimeout(() => setSpeakingJudge(null), delay - 100);
-      });
+      
+      const speakNext = (index: number) => {
+        if (index >= feedback.length) {
+          setSpeakingJudge(null);
+          if (round + 1 >= questions.length) {
+            addXP(100, 'Completed Boardroom interview');
+            completeChallenge('boardroom-round');
+            trackAction('boardroom_round');
+            setPhase('results');
+          } else {
+            addXP(25, 'Completed Boardroom round');
+            setRound(prev => prev + 1);
+          }
+          return;
+        }
 
-      setTranscript('');
-      if (round + 1 >= questions.length) {
-        setTimeout(() => setPhase('results'), delay + 500);
-      } else {
-        setRound(prev => prev + 1);
-      }
+        const j = feedback[index];
+        setSpeakingJudge(j.judge);
+        
+        const utterance = new SpeechSynthesisUtterance(j.feedback + ". " + j.follow_up);
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            // Just picking different voices to sound like a panel
+            utterance.voice = voices[index % voices.length];
+        }
+        
+        utterance.onend = () => {
+          setSpeakingJudge(null);
+          setTimeout(() => speakNext(index + 1), 500);
+        };
+        
+        utterance.onerror = () => {
+          setSpeakingJudge(null);
+          setTimeout(() => speakNext(index + 1), 500);
+        };
+
+        window.speechSynthesis.speak(utterance);
+      };
+
+      // Start the speaking sequence
+      speakNext(0);
+
     } catch (e) {
       console.error(e);
+      setTranscript(''); // fallback clear
     } finally {
       setTimeout(() => setIsEvaluating(false), 1000);
     }
@@ -281,6 +321,27 @@ export const Boardroom: React.FC = () => {
               </div>
             </div>
 
+            {/* NEW: Interview Sprint Game Promo */}
+            <div 
+              onClick={() => navigate('/sprint')}
+              className="mb-8 p-6 rounded-3xl bg-gradient-to-r from-primary/20 to-violet-500/20 border-2 border-primary/30 cursor-pointer group hover:scale-[1.02] transition-all relative overflow-hidden"
+            >
+              <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-primary/20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
+              <div className="flex items-center gap-6 relative z-10">
+                <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white shadow-xl shadow-primary/30 group-hover:rotate-12 transition-transform">
+                  <Gamepad2 size={32} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 bg-primary text-white text-[10px] font-black rounded-md uppercase tracking-widest">New Game</span>
+                    <h3 className="text-xl font-black text-white">INTERVIEW SPRINT</h3>
+                  </div>
+                  <p className="text-sky-200 text-sm">A fast-paced 5-question challenge with real-time AI scoring. Are you ready?</p>
+                </div>
+                <ArrowRight className="text-primary group-hover:translate-x-2 transition-transform" size={24} />
+              </div>
+            </div>
+
             {/* Judge Preview */}
             <div className="grid grid-cols-2 gap-3 mb-8">
               {JUDGES.map(j => (
@@ -296,19 +357,52 @@ export const Boardroom: React.FC = () => {
               ))}
             </div>
 
-            {/* Role Selection */}
-            <div className="mb-6 space-y-2">
-              <label className="text-sky-300 text-xs font-bold uppercase tracking-widest">Practicing for role</label>
-              <select
-                value={role}
-                onChange={e => setRole(e.target.value)}
-                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
-              >
-                {Object.keys(INTERVIEW_QUESTIONS).map(r => (
-                  <option key={r} value={r} className="text-slate-900">{r}</option>
-                ))}
-              </select>
+            {/* Role & Difficulty Selection */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div className="space-y-2">
+                <label className="text-sky-300 text-xs font-bold uppercase tracking-widest">Role</label>
+                <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white font-medium focus:outline-none focus:ring-2 focus:ring-primary/50">
+                  {Object.keys(INTERVIEW_QUESTIONS).map(r => (<option key={r} value={r} className="text-slate-900">{r}</option>))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sky-300 text-xs font-bold uppercase tracking-widest">Difficulty</label>
+                <div className="flex gap-2">
+                  {(['Entry', 'Mid', 'Senior'] as const).map(d => (
+                    <button key={d} onClick={() => setDifficulty(d)} className={cn('flex-1 py-3 rounded-xl font-bold text-sm transition-all', difficulty === d ? 'bg-primary text-white shadow-lg' : 'bg-white/10 text-white/60 hover:bg-white/20')}>{d}</button>
+                  ))}
+                </div>
+              </div>
             </div>
+
+            {/* Custom Interview Specification */}
+            <div className="space-y-2 mb-6">
+              <label className="text-sky-300 text-xs font-bold uppercase tracking-widest">Specifics (Optional)</label>
+              <input 
+                type="text" 
+                value={context} 
+                onChange={e => setContext(e.target.value)} 
+                placeholder="e.g. 'Meta E5 Frontend Interview' or 'Focus on React performance'"
+                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-sky-200/40 font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+
+            {/* Prep Tips Toggle */}
+            <button onClick={() => setShowPrepTips(!showPrepTips)} className="w-full mb-4 py-3 bg-amber-500/10 border border-amber-400/20 rounded-xl text-amber-300 font-bold text-sm flex items-center justify-center gap-2 hover:bg-amber-500/20 transition-colors">
+              <BookOpen size={16} /> {showPrepTips ? 'Hide' : 'Show'} Preparation Tips
+            </button>
+            {showPrepTips && (
+              <div className="mb-6 bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+                <h4 className="text-white font-bold text-sm flex items-center gap-2"><Zap size={14} className="text-amber-400" /> Quick Prep for {role}</h4>
+                <ul className="space-y-2 text-sm text-sky-200">
+                  <li className="flex items-start gap-2"><span className="text-amber-400">•</span> Use the STAR method (Situation, Task, Action, Result) for behavioral questions</li>
+                  <li className="flex items-start gap-2"><span className="text-amber-400">•</span> Be specific — reference real projects, metrics, and outcomes</li>
+                  <li className="flex items-start gap-2"><span className="text-amber-400">•</span> Don't just describe what happened — explain your reasoning and trade-offs</li>
+                  <li className="flex items-start gap-2"><span className="text-amber-400">•</span> Each judge evaluates differently: CEO = strategy, Tech Lead = depth, PM = empathy, HR = culture</li>
+                  <li className="flex items-start gap-2"><span className="text-amber-400">•</span> Aim for 60-90 second answers. Too short = vague, too long = unfocused</li>
+                </ul>
+              </div>
+            )}
 
             {cameraError && (
               <div className="mb-4 px-4 py-3 bg-red-500/20 border border-red-400/30 rounded-xl text-red-300 text-sm font-medium flex items-center gap-2">

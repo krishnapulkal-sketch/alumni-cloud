@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useGamification } from '../context/GamificationContext';
 import {
   collection, query, where, onSnapshot, addDoc, serverTimestamp,
   orderBy, getDocs, doc, setDoc, updateDoc, getDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Send, Search, ArrowLeft, MessageCircle } from 'lucide-react';
+import { Send, Search, ArrowLeft, MessageCircle, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import ReactMarkdown from 'react-markdown';
 
@@ -29,6 +30,7 @@ interface Conversation {
 
 export const Messages: React.FC = () => {
   const { user, profile } = useAuth();
+  const { addXP, completeChallenge, trackAction } = useGamification();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [activeParticipant, setActiveParticipant] = useState<any>(null);
@@ -36,45 +38,76 @@ export const Messages: React.FC = () => {
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'list' | 'chat'>('list');
+  const [toast, setToast] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isGuest = user?.uid === 'guest-123';
 
   const [demoUsers, setDemoUsers] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch('/api/alumni')
-      .then(res => res.json())
-      .then(data => {
-        setDemoUsers(data.alumni.slice(0, 15).map((a: any) => ({
+    const fetchUsers = async () => {
+      try {
+        const demoRes = await fetch('/api/alumni');
+        const demoData = await demoRes.json();
+        const demoAlumni = (demoData.alumni || []).slice(0, 15).map((a: any) => ({
           uid: a.id,
           displayName: a.name,
           photoURL: a.photo,
           email: a.email
-        })));
-      })
-      .catch(console.error);
-  }, []);
+        }));
+
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        const realUsers = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            uid: doc.id,
+            displayName: data.displayName || 'Alumni',
+            photoURL: data.photoURL || `https://picsum.photos/seed/${doc.id}/64/64`,
+            email: data.email
+          };
+        });
+
+        // Combine and filter out current user
+        const combined = [...realUsers];
+        demoAlumni.forEach((da: any) => {
+          if (!combined.find(u => u.uid === da.uid)) {
+            combined.push(da);
+          }
+        });
+
+        setDemoUsers(combined.filter(u => u.uid !== user?.uid));
+      } catch (err) {
+        console.error("Error fetching users for messaging:", err);
+      }
+    };
+
+    fetchUsers();
+  }, [user?.uid]);
 
   // Listen to conversations
   useEffect(() => {
     if (!user?.uid || isGuest) return;
     const q = query(collection(db, 'conversations'), where('participants', 'array-contains', user.uid));
+    
+    // We need to handle async user fetching without race conditions between snapshots
+    let isCancelled = false;
+    
     const unsub = onSnapshot(q, async (snap) => {
-      const convs: Conversation[] = [];
-      for (const d of snap.docs) {
+      const convsPromises = snap.docs.map(async (d) => {
         const data = d.data();
         const otherId = data.participants.find((p: string) => p !== user.uid);
-        // Get other user profile
         let otherUser = { displayName: 'Unknown', photoURL: '', uid: otherId };
+        
         if (otherId && demoUsers.length > 0) {
           otherUser = demoUsers.find(u => u.uid === otherId) || otherUser as any;
-        } else {
+        } else if (otherId) {
           try {
             const uSnap = await getDoc(doc(db, 'users', otherId));
             if (uSnap.exists()) otherUser = { ...uSnap.data(), uid: otherId } as any;
           } catch {}
         }
-        convs.push({
+        
+        return {
           id: d.id,
           participantId: otherId,
           participantName: otherUser.displayName,
@@ -82,28 +115,34 @@ export const Messages: React.FC = () => {
           lastMessage: data.lastMessage || '',
           lastMessageTime: data.lastMessageTime,
           unread: data.unread?.[user.uid] || 0
-        });
-      }
-      convs.sort((a, b) => (b.lastMessageTime?.seconds || 0) - (a.lastMessageTime?.seconds || 0));
+        } as Conversation;
+      });
+
+      const convs = await Promise.all(convsPromises);
+      if (isCancelled) return;
+      
+      convs.sort((a, b) => {
+        const timeA = a.lastMessageTime?.seconds || 0;
+        const timeB = b.lastMessageTime?.seconds || 0;
+        return timeB - timeA;
+      });
       setConversations(convs);
     }, (error) => {
-      console.warn("Conversations listener error (this is normal if Firebase Rules are strict):", error.message);
+      console.warn("Conversations listener error:", error.message);
     });
-    return () => unsub();
-  }, [user?.uid]);
+    
+    return () => {
+      isCancelled = true;
+      unsub();
+    };
+  }, [user?.uid, demoUsers]);
 
   // Listen to messages in active conversation
   useEffect(() => {
     if (!activeConvId) return;
-    const q = query(collection(db, 'conversations', activeConvId, 'messages'));
+    const q = query(collection(db, 'conversations', activeConvId, 'messages'), orderBy('timestamp', 'asc'));
     const unsub = onSnapshot(q, (snap) => {
-      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as FirestoreMessage));
-      // Manually sort to avoid Firebase excluding documents with null (pending) serverTimestamps
-      msgs.sort((a, b) => {
-        const timeA = a.timestamp?.seconds || Date.now() / 1000;
-        const timeB = b.timestamp?.seconds || Date.now() / 1000;
-        return timeA - timeB;
-      });
+      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) } as FirestoreMessage));
       setMessages(msgs);
     }, (error) => {
       console.warn("Messages listener error:", error.message);
@@ -129,7 +168,9 @@ export const Messages: React.FC = () => {
         lastMessage: '',
         lastMessageTime: serverTimestamp(),
         unread: {}
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error("Failed to create conversation document:", err.message);
+      });
     }
     setActiveConvId(convId);
     setActiveParticipant(otherUser);
@@ -140,6 +181,8 @@ export const Messages: React.FC = () => {
     if (!input.trim() || !activeConvId || !user?.uid) return;
     const text = input.trim();
     setInput('');
+    addXP(5, 'Sent a message');
+    trackAction('message_sent');
 
     // Optimistic fallback update (to ensure it visually works even if Firebase errors out)
     const localMsg: FirestoreMessage = {
@@ -165,6 +208,8 @@ export const Messages: React.FC = () => {
       });
     } catch (err: any) {
       console.warn('Firebase write was rejected, message is only visible locally. Error:', err.message);
+      setToast("Failed to save message. Please check connection.");
+      setTimeout(() => setToast(null), 4000);
     }
   };
 
@@ -185,6 +230,12 @@ export const Messages: React.FC = () => {
 
   return (
     <main className="pt-20 pb-28 max-w-5xl mx-auto h-screen flex flex-col">
+      {toast && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-rose-500 text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-8 duration-300">
+          <AlertCircle size={22} />
+          <span className="font-bold">{toast}</span>
+        </div>
+      )}
       <div className="flex-1 flex overflow-hidden rounded-3xl shadow-2xl border border-slate-100 bg-white mx-4">
 
         {/* Sidebar */}

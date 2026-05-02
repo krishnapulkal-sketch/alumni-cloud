@@ -16,6 +16,7 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
   const { profile, updateProfilePhoto } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string>(profile?.photoURL || '');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [expertiseList, setExpertiseList] = useState<string[]>(
     Array.isArray(profile?.expertise) ? profile.expertise : []
   );
@@ -51,6 +52,11 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Photo size exceeds 5MB limit.');
+      return;
+    }
+    setPhotoFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => {
       const url = ev.target?.result as string;
@@ -113,9 +119,21 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
     setError(null);
     setSuccess(false);
     try {
+      let finalPhotoUrl = profile.photoURL;
+
+      // Upload new photo to storage if selected
+      if (photoFile && profile.uid !== 'guest-123') {
+        const storageRef = ref(storage, `avatars/${profile.uid}`);
+        await uploadBytesResumable(storageRef, photoFile);
+        finalPhotoUrl = await getDownloadURL(storageRef);
+      } else if (photoPreview && photoPreview !== profile.photoURL) {
+        // Fallback or guest user local update
+        finalPhotoUrl = photoPreview;
+      }
+
       // Update local photo state immediately
-      if (photoPreview && photoPreview !== profile.photoURL) {
-        updateProfilePhoto(photoPreview);
+      if (finalPhotoUrl && finalPhotoUrl !== profile.photoURL) {
+        updateProfilePhoto(finalPhotoUrl);
       }
 
       // Guest users — save locally only
@@ -133,7 +151,7 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
         classOf: formData.classOf,
         resumeUrl: formData.resumeUrl,
         expertise: expertiseList,
-        ...(photoPreview !== profile.photoURL ? { photoURL: photoPreview } : {})
+        ...(finalPhotoUrl !== profile.photoURL ? { photoURL: finalPhotoUrl } : {})
       });
 
       setSuccess(true);
@@ -190,7 +208,7 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
               <div className="recessed-input flex items-center px-4 py-3 gap-3">
                 <Sparkles size={18} className="text-primary" />
                 <input
-                  className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium"
+                  className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium text-slate-900 dark:text-white"
                   value={formData.displayName}
                   onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
                 />
@@ -201,7 +219,7 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
               <div className="recessed-input flex items-center px-4 py-3 gap-3">
                 <MapPin size={18} className="text-primary" />
                 <input
-                  className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium"
+                  className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium text-slate-900 dark:text-white"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                 />
@@ -212,7 +230,7 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
               <div className="recessed-input flex items-center px-4 py-3 gap-3">
                 <GraduationCap size={18} className="text-primary" />
                 <input
-                  className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium"
+                  className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium text-slate-900 dark:text-white"
                   value={formData.classOf}
                   onChange={(e) => setFormData({ ...formData, classOf: e.target.value })}
                 />
@@ -237,7 +255,7 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
             </div>
             <div className="recessed-input flex items-center px-4 py-3 gap-3">
               <input
-                className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium"
+                className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium text-slate-900 dark:text-white"
                 placeholder="Type a skill and press Enter..."
                 value={expertiseInput}
                 onChange={(e) => setExpertiseInput(e.target.value)}
@@ -264,7 +282,7 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-widest text-slate-400 ml-2">Bio</label>
             <textarea
-              className="w-full recessed-input p-4 text-sm font-medium min-h-[120px] resize-none"
+              className="w-full recessed-input p-4 text-sm font-medium min-h-[120px] resize-none text-slate-900 dark:text-white"
               value={formData.bio}
               onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
             />
@@ -318,7 +336,7 @@ export const ProfileEdit: React.FC<{ onCancel: () => void }> = ({ onCancel }) =>
                 <label className="text-xs font-bold uppercase tracking-widest text-slate-400 ml-2">Alternative: External Link</label>
                 <div className="recessed-input px-4 py-3">
                   <input
-                    className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium"
+                    className="bg-transparent border-none focus:ring-0 w-full text-sm font-medium text-slate-900 dark:text-white"
                     placeholder="Paste a Google Drive or Portfolio link instead..."
                     value={formData.resumeUrl}
                     onChange={(e) => setFormData({ ...formData, resumeUrl: e.target.value })}
